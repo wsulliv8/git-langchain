@@ -85,34 +85,6 @@ query GitOdysseyData(
                 changedFiles
                 additions
                 deletions
-
-                # Associated pull requests
-                associatedPullRequests(first: 5) {
-                  nodes {
-                    number
-                    title
-                    body
-                    state
-                    createdAt
-                    mergedAt
-                    closedAt
-                    author {
-                      login
-                    }
-                    commits(first: 10) {
-                      nodes {
-                        commit {
-                          oid
-                        }
-                      }
-                    }
-                    closingIssuesReferences(first: 10) {
-                      nodes {
-                        number
-                      }
-                    }
-                  }
-                }
               }
             }
           }

@@ -2,6 +2,7 @@ import requests
 import os
 from dotenv import load_dotenv
 from pprint import pprint
+import json
 
 load_dotenv()
 
@@ -13,7 +14,7 @@ with open("query.graphql", "r") as file:
 
 variables = {
     "owner": "wsulliv8",
-    "repoName": "raft-kv-store",
+    "repoName": "go-raft",
     "branchName": "main",
 }
 
@@ -26,4 +27,4 @@ resp = requests.post(
     URL, headers=headers, json={"query": query, "variables": variables}
 )
 
-pprint(resp.json())
+pprint(json.dumps(resp.json(), indent=2))

@@ -20,50 +20,52 @@ query GetCommits($owner: String!, $repoName: String!, $branchName: String!) {
                     oid
                   }
                 }
-              }
-            }
 
-            asssociatedPullRequests(first: 1, orderBy: { field: CREATED_AT, direction: DESC }) {
-              edges {
-                node {
-                  title
-                  number
-                  body
-                  stat
-                  mergedAt
-                  createdAt
+                associatedPullRequests(
+                  first: 1
+                  orderBy: { field: CREATED_AT, direction: DESC }
+                ) {
+                  edges {
+                    node {
+                      title
+                      number
+                      body
+                      mergedAt
+                      createdAt
 
-                  closingIssuesReferences(first: 10) {
-                    edges {
-                      node {
-                        title
-                        number
-                        body
-                        closedAt
-                        labels(first: 10) {
-                          edges {
-                            node {
-                              name
+                      closingIssuesReferences(first: 10) {
+                        edges {
+                          node {
+                            title
+                            number
+                            body
+                            closedAt
+                            labels(first: 10) {
+                              edges {
+                                node {
+                                  name
+                                }
+                              }
                             }
+                          }
+                        }
+                      }
+
+                      files(first: 10) {
+                        edges {
+                          node {
+                            path
+                            changeType
+                            additions
+                            deletions
                           }
                         }
                       }
                     }
                   }
-
-                  files(first: 10) {
-                    edges {
-                      node {
-                        path
-                        changeType
-                        additions
-                        deletions
-                        patch
-                      }
-                    }
-                  }
                 }
               }
+            }
           }
         }
       }
