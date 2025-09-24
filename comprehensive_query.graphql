@@ -15,7 +15,7 @@ query GitOdysseyData(
     updatedAt
 
     # Branches (for branchHints)
-    refs(first: 20, refPrefix: "refs/heads/") {
+    branches: refs(first: 20, refPrefix: "refs/heads/") {
       nodes {
         name
         target {
@@ -27,7 +27,7 @@ query GitOdysseyData(
     }
 
     # Tags (for tagHints)
-    refs(first: 20, refPrefix: "refs/tags/") {
+    tags: refs(first: 20, refPrefix: "refs/tags/") {
       nodes {
         name
         target {
@@ -126,16 +126,6 @@ query GitOdysseyData(
           }
         }
 
-        # Issues closed by this PR
-        closingIssuesReferences(first: 10) {
-          nodes {
-            number
-            title
-            state
-            closedAt
-          }
-        }
-
         # Files changed
         files(first: 100) {
           nodes {
@@ -167,15 +157,6 @@ query GitOdysseyData(
           nodes {
             name
             color
-          }
-        }
-
-        # Pull requests that close this issue
-        closingIssuesReferences(first: 5) {
-          nodes {
-            number
-            title
-            state
           }
         }
       }

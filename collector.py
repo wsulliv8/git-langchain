@@ -3,6 +3,7 @@ import os
 import json
 import subprocess
 import re
+import sys
 from dotenv import load_dotenv
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
@@ -80,7 +81,7 @@ class GitOdysseyDataCollector:
     def fetch_data(
         self, owner: str, repo_name: str, branch_name: str = "main"
     ) -> Dict[str, Any]:
-        query = self.load_query("query.graphql")
+        query = self.load_query("comprehensive_query.graphql")
         variables = {
             "owner": owner,
             "repoName": repo_name,
@@ -95,7 +96,23 @@ class GitOdysseyDataCollector:
         if response.status_code != 200:
             raise Exception(f"GraphQL request failed: {response.status_code}")
 
-        return response.json()
+        result = response.json()
+
+        # Debug: print the response structure
+        if "errors" in result:
+            print(
+                "GraphQL Errors:",
+                json.dumps(result["errors"], indent=2),
+                file=sys.stderr,
+            )
+        if "data" not in result:
+            print(
+                "No 'data' field in response:",
+                json.dumps(result, indent=2),
+                file=sys.stderr,
+            )
+
+        return result
 
     def fetch_diffs(
         self, owner: str, repo_name: str, commit_sha: str
@@ -214,23 +231,21 @@ class GitOdysseyDataCollector:
         branch_map = {}
         tag_map = {}
 
-        for ref in repo_data["refs"]:
-            if ref["name"].startswith("refs/heads/"):
-                branch_name = ref["name"].replace("refs/heads/", "")
-                if ref["target"] and "oid" in ref["target"]:
-                    branch_map[ref["target"]["oid"]] = branch_name
+        for branch in repo_data["branches"]["nodes"]:
+            branch_name = branch["name"]
+            if branch["target"] and "oid" in branch["target"]:
+                branch_map[branch["target"]["oid"]] = branch_name
 
-        for ref in repo_data["refs"]:
-            if ref["name"].startswith("refs/tags/"):
-                tag_name = ref["name"].replace("refs/tags/", "")
-                target_oid = None
-                if ref["target"]:
-                    if "oid" in ref["target"]:
-                        target_oid = ref["target"]["oid"]
-                    elif "target" in ref["target"] and "oid" in ref["target"]["target"]:
-                        target_oid = ref["target"]["target"]["oid"]
-                if target_oid:
-                    tag_map[target_oid] = tag_name
+        for tag in repo_data["tags"]["nodes"]:
+            tag_name = tag["name"]
+            target_oid = None
+            if tag["target"]:
+                if "oid" in tag["target"]:
+                    target_oid = tag["target"]["oid"]
+                elif "target" in tag["target"] and "oid" in tag["target"]["target"]:
+                    target_oid = tag["target"]["target"]["oid"]
+            if target_oid:
+                tag_map[target_oid] = tag_name
 
         # Process commits
         commits = []
@@ -267,7 +282,7 @@ class GitOdysseyDataCollector:
 
             # Fetch and process diffs for this commit
             try:
-                files_data = self.fetch_diffs("wsulliv8", "raft-kv-store", commit_sha)
+                files_data = self.fetch_diffs("wsulliv8", "go-raft", commit_sha)
 
                 for file_data in files_data:
                     # Create FileDelta
