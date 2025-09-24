@@ -1,0 +1,72 @@
+query GetCommits($owner: String!, $repoName: String!, $branchName: String!) {
+  repository(owner: $owner, name: $repoName) {
+    ref(qualifiedName: $branchName) {
+      target {
+        ... on Commit {
+          history(first: 10) {
+            edges {
+              node {
+                oid
+                message
+                messageBody
+                messageHeadline
+                author {
+                  name
+                  email
+                }
+                committedDate
+                parents(first: 5) {
+                  nodes {
+                    oid
+                  }
+                }
+              }
+            }
+
+            asssociatedPullRequests(first: 1, orderBy: { field: CREATED_AT, direction: DESC }) {
+              edges {
+                node {
+                  title
+                  number
+                  body
+                  stat
+                  mergedAt
+                  createdAt
+
+                  closingIssuesReferences(first: 10) {
+                    edges {
+                      node {
+                        title
+                        number
+                        body
+                        closedAt
+                        labels(first: 10) {
+                          edges {
+                            node {
+                              name
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+
+                  files(first: 10) {
+                    edges {
+                      node {
+                        path
+                        changeType
+                        additions
+                        deletions
+                        patch
+                      }
+                    }
+                  }
+                }
+              }
+          }
+        }
+      }
+    }
+  }
+}

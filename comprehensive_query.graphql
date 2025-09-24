@@ -1,0 +1,212 @@
+query GitOdysseyData(
+  $owner: String!
+  $repoName: String!
+  $branchName: String!
+  $firstCommits: Int = 50
+  $firstPRs: Int = 20
+  $firstIssues: Int = 20
+) {
+  repository(owner: $owner, name: $repoName) {
+    # Repository metadata
+    name
+    description
+    url
+    createdAt
+    updatedAt
+
+    # Branches (for branchHints)
+    refs(first: 20, refPrefix: "refs/heads/") {
+      nodes {
+        name
+        target {
+          ... on Commit {
+            oid
+          }
+        }
+      }
+    }
+
+    # Tags (for tagHints)
+    refs(first: 20, refPrefix: "refs/tags/") {
+      nodes {
+        name
+        target {
+          ... on Commit {
+            oid
+          }
+          ... on Tag {
+            target {
+              ... on Commit {
+                oid
+              }
+            }
+          }
+        }
+      }
+    }
+
+    # Main branch commits
+    ref(qualifiedName: $branchName) {
+      target {
+        ... on Commit {
+          history(first: $firstCommits) {
+            edges {
+              node {
+                # Commit data
+                oid
+                abbreviatedOid
+                messageHeadline
+                messageBody
+                author {
+                  name
+                  email
+                  user {
+                    login
+                  }
+                }
+                committer {
+                  name
+                  email
+                  user {
+                    login
+                  }
+                }
+                committedDate
+                authoredDate
+
+                # Parents
+                parents(first: 10) {
+                  nodes {
+                    oid
+                  }
+                }
+
+                # File changes (limited info available in GraphQL)
+                changedFiles
+                additions
+                deletions
+
+                # Associated pull requests
+                associatedPullRequests(first: 5) {
+                  nodes {
+                    number
+                    title
+                    body
+                    state
+                    createdAt
+                    mergedAt
+                    closedAt
+                    author {
+                      login
+                    }
+                    commits(first: 10) {
+                      nodes {
+                        commit {
+                          oid
+                        }
+                      }
+                    }
+                    closingIssuesReferences(first: 10) {
+                      nodes {
+                        number
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    # Pull Requests
+    pullRequests(
+      first: $firstPRs
+      orderBy: { field: CREATED_AT, direction: DESC }
+    ) {
+      nodes {
+        number
+        title
+        body
+        state
+        createdAt
+        mergedAt
+        closedAt
+        author {
+          login
+        }
+        baseRefName
+        headRefName
+
+        # Commits in this PR
+        commits(first: 50) {
+          nodes {
+            commit {
+              oid
+              messageHeadline
+              author {
+                name
+                email
+              }
+              committedDate
+            }
+          }
+        }
+
+        # Issues closed by this PR
+        closingIssuesReferences(first: 10) {
+          nodes {
+            number
+            title
+            state
+            closedAt
+          }
+        }
+
+        # Files changed
+        files(first: 100) {
+          nodes {
+            path
+            additions
+            deletions
+            changeType
+          }
+        }
+      }
+    }
+
+    # Issues
+    issues(
+      first: $firstIssues
+      orderBy: { field: CREATED_AT, direction: DESC }
+    ) {
+      nodes {
+        number
+        title
+        body
+        state
+        createdAt
+        closedAt
+        author {
+          login
+        }
+        labels(first: 10) {
+          nodes {
+            name
+            color
+          }
+        }
+
+        # Pull requests that close this issue
+        closingIssuesReferences(first: 5) {
+          nodes {
+            number
+            title
+            state
+          }
+        }
+      }
+    }
+  }
+}
