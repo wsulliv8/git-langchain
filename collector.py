@@ -1,9 +1,6 @@
 import requests
 import os
 import json
-import subprocess
-import re
-import sys
 from dotenv import load_dotenv
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
@@ -71,20 +68,32 @@ class GitOdysseyDataCollector:
     def __init__(self):
         self.url = "https://api.github.com/graphql"
         self.token = os.getenv("GITHUB_TOKEN")
+        self.repo_name = "raft-kv-store"
+        self.owner = "wsulliv8"
+        self.query_file = "query.graphql"
+        self.repo_path = "."
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
         }
+        self.status_map = {
+            Delta.ADDED: "Add",
+            Delta.DELETED: "Del",
+            Delta.MODIFIED: "Mod",
+            Delta.RENAMED: "Rename",
+            Delta.COPIED: "Copy",
+            Delta.IGNORED: "Ignored",
+            Delta.UNTRACKED: "Untracked",
+            Delta.TYPECHANGE: "TypeChange",
+        }
 
-    def load_query(self, query_file: str) -> str:
-        with open(query_file, "r") as file:
-            return file.read()
+    def fetch_data_api(self) -> Dict[str, Any]:
+        with open(self.query_file, "r") as file:
+            query = file.read()
 
-    def fetch_data_api(self, owner: str, repo_name: str) -> Dict[str, Any]:
-        query = self.load_query("query.graphql")
         variables = {
-            "owner": owner,
-            "repoName": repo_name,
+            "owner": self.owner,
+            "repoName": self.repo_name,
         }
         response = requests.post(
             self.url,
@@ -102,12 +111,55 @@ class GitOdysseyDataCollector:
 
         return result
 
-    def fetch_data_local(self, repo_path: str = ".") -> Dict[str, Any]:
+    def fetch_data_local(self) -> Dict[str, Any]:
         """Use pygit2 to fetch local Git data"""
         try:
-            repo = pg.Repository(repo_path)
+            repo = pg.Repository(self.repo_path)
         except pg.GitError as e:
-            raise Exception(f"Could not open repository at {repo_path}: {e}")
+            raise Exception(f"Could not open repository at {self.repo_path}: {e}")
+
+        return repo or None
+
+    def parse_data_api(self, data: Dict[str, Any]) -> Dict[str, List]:
+        repo_data = data["data"]["repository"]
+
+        # Process PRs
+        prs = []
+        for pr_node in repo_data["pullRequests"]["nodes"]:
+            pr = PR(
+                id=pr_node["number"],
+                title=pr_node["title"],
+                body=pr_node["body"] or "",
+                state=pr_node["state"],
+                createdAt=pr_node["createdAt"],
+                mergedAt=pr_node["mergedAt"],
+                commits=[
+                    commit["commit"]["oid"] for commit in pr_node["commits"]["nodes"]
+                ],
+                issues=[],  # Will be populated by linking logic if needed
+            )
+            prs.append(pr)
+
+        # Process Issues
+        issues = []
+        for issue_node in repo_data["issues"]["nodes"]:
+            issue = Issue(
+                id=issue_node["number"],
+                title=issue_node["title"],
+                body=issue_node["body"] or "",
+                labels=[label["name"] for label in issue_node["labels"]["nodes"]],
+                closedAt=issue_node["closedAt"],
+            )
+            issues.append(issue)
+
+        return {
+            "prs": [asdict(pr) for pr in prs],
+            "issues": [asdict(issue) for issue in issues],
+        }
+
+    def parse_data_local(self, repo: pg.Repository) -> Dict[str, Any]:
+        if repo is None:
+            raise Exception("Repository is None")
 
         commits = []
         file_deltas = []
@@ -176,7 +228,7 @@ class GitOdysseyDataCollector:
                         sha=str(commit.id),
                         pathOld=delta.old_file.path if delta.old_file.path else None,
                         pathNew=delta.new_file.path if delta.new_file.path else None,
-                        status=self._get_delta_status(delta.status),
+                        status=self.status_map[delta.status],
                         lang=self.detect_language(
                             delta.new_file.path or delta.old_file.path
                         ),
@@ -227,20 +279,6 @@ class GitOdysseyDataCollector:
             "hunks": [asdict(hunk) for hunk in hunks],
         }
 
-    def _get_delta_status(self, status: int) -> str:
-        """Convert pygit2 delta status to string"""
-        status_map = {
-            Delta.ADDED: "Add",
-            Delta.DELETED: "Del",
-            Delta.MODIFIED: "Mod",
-            Delta.RENAMED: "Rename",
-            Delta.COPIED: "Copy",
-            Delta.IGNORED: "Ignored",
-            Delta.UNTRACKED: "Untracked",
-            Delta.TYPECHANGE: "TypeChange",
-        }
-        return status_map.get(status, "Mod")
-
     def _populate_branch_hints(self, repo: pg.Repository, commits: List[Commit]):
         """Populate branch hints for commits"""
         branch_map = {}
@@ -283,55 +321,26 @@ class GitOdysseyDataCollector:
             if commit.sha in tag_map:
                 commit.tagHints.append(tag_map[commit.sha])
 
-    def process_data(self, data: Dict[str, Any]) -> Dict[str, List]:
-        repo_data = data["data"]["repository"]
-
-        # Process PRs
-        prs = []
-        for pr_node in repo_data["pullRequests"]["nodes"]:
-            pr = PR(
-                id=pr_node["number"],
-                title=pr_node["title"],
-                body=pr_node["body"] or "",
-                state=pr_node["state"],
-                createdAt=pr_node["createdAt"],
-                mergedAt=pr_node["mergedAt"],
-                commits=[
-                    commit["commit"]["oid"] for commit in pr_node["commits"]["nodes"]
-                ],
-                issues=[],  # Will be populated by linking logic if needed
-            )
-            prs.append(pr)
-
-        # Process Issues
-        issues = []
-        for issue_node in repo_data["issues"]["nodes"]:
-            issue = Issue(
-                id=issue_node["number"],
-                title=issue_node["title"],
-                body=issue_node["body"] or "",
-                labels=[label["name"] for label in issue_node["labels"]["nodes"]],
-                closedAt=issue_node["closedAt"],
-            )
-            issues.append(issue)
-
-        return {
-            "prs": [asdict(pr) for pr in prs],
-            "issues": [asdict(issue) for issue in issues],
-        }
-
 
 def main():
     collector = GitOdysseyDataCollector()
 
     # Fetch PRs and Issues data
-    data = collector.fetch_data_api("wsulliv8", "raft-kv-store")
+    data_api = collector.fetch_data_api()
+    data_local = collector.fetch_data_local()
 
     # Process data
-    processed_data = collector.process_data(data)
+    processed_data = collector.parse_data_api(data_api)
+    processed_data_local = collector.parse_data_local(data_local)
+
+    # Merge data
+    merged_data = {
+        **processed_data,
+        **processed_data_local,
+    }
 
     # Output results
-    print(json.dumps(processed_data, indent=2))
+    print(json.dumps(merged_data, indent=2))
 
 
 if __name__ == "__main__":
