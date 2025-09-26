@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 import pygit2 as pg
-from pygit2.enums import Delta
+from utils.file_utils import detect_language
 
 load_dotenv()
 
@@ -71,20 +71,23 @@ class GitOdysseyDataCollector:
         self.repo_name = "raft-kv-store"
         self.owner = "wsulliv8"
         self.query_file = "query.graphql"
-        self.repo_path = "."
+        self.repo_path = "../distributed-systems/go/go-raft"
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
         }
         self.status_map = {
-            Delta.ADDED: "Add",
-            Delta.DELETED: "Del",
-            Delta.MODIFIED: "Mod",
-            Delta.RENAMED: "Rename",
-            Delta.COPIED: "Copy",
-            Delta.IGNORED: "Ignored",
-            Delta.UNTRACKED: "Untracked",
-            Delta.TYPECHANGE: "TypeChange",
+            pg.GIT_DELTA_UNMODIFIED: "Unmodified",
+            pg.GIT_DELTA_ADDED: "Add",
+            pg.GIT_DELTA_DELETED: "Del",
+            pg.GIT_DELTA_MODIFIED: "Mod",
+            pg.GIT_DELTA_RENAMED: "Rename",
+            pg.GIT_DELTA_COPIED: "Copy",
+            pg.GIT_DELTA_IGNORED: "Ignored",
+            pg.GIT_DELTA_UNTRACKED: "Untracked",
+            pg.GIT_DELTA_TYPECHANGE: "TypeChange",
+            pg.GIT_DELTA_UNREADABLE: "Unreadable",
+            pg.GIT_DELTA_CONFLICTED: "Conflicted",
         }
 
     def fetch_data_api(self) -> Dict[str, Any]:
@@ -170,11 +173,12 @@ class GitOdysseyDataCollector:
         all_commits = []
 
         # Walk through origin branches only
-        for branch in repo.branches.remote:
+        for branch_name in repo.branches.remote:
             try:
-                branch_commit = branch.peel(pg.Commit)
+                branch_ref = repo.lookup_reference(f"refs/remotes/{branch_name}")
+                branch_commit = branch_ref.peel(pg.Commit)
                 # Walk from this branch tip
-                for commit in repo.walk(branch_commit.id, pg.SortMode.TIME):
+                for commit in repo.walk(branch_commit.id, pg.enums.SortMode.TIME):
                     commit_id = str(commit.id)
                     if commit_id not in seen_commits:
                         seen_commits.add(commit_id)
@@ -205,22 +209,19 @@ class GitOdysseyDataCollector:
                 parent = commit.parents[0]
                 diff = repo.diff(parent, commit)
 
-                for delta in diff.deltas:
-                    # Get patch once and reuse for both stats and hunks
+                # Iterate over patches directly (each patch corresponds to a delta)
+                for patch in diff:
+                    delta = patch.delta
+                    # Get line stats from the patch
                     additions = 0
                     deletions = 0
-                    patch = None
 
                     try:
-                        patch = repo.diff(
-                            parent, commit, delta.old_file.path, delta.new_file.path
-                        )
-                        # Use line_stats for efficient counting
                         line_stats = patch.line_stats
                         additions = line_stats[1]  # insertions
                         deletions = line_stats[2]  # deletions
-                    except pg.GitError:
-                        # If we can't get patch, use 0 for counts
+                    except (pg.GitError, AttributeError):
+                        # If we can't get line stats, use 0 for counts
                         pass
 
                     # Create FileDelta object
@@ -229,7 +230,7 @@ class GitOdysseyDataCollector:
                         pathOld=delta.old_file.path if delta.old_file.path else None,
                         pathNew=delta.new_file.path if delta.new_file.path else None,
                         status=self.status_map[delta.status],
-                        lang=self.detect_language(
+                        lang=detect_language(
                             delta.new_file.path or delta.old_file.path
                         ),
                         locAdd=additions,
@@ -255,13 +256,13 @@ class GitOdysseyDataCollector:
                 # Initial commit - all files are added
                 tree = commit.tree
                 for entry in tree:
-                    if entry.type == pg.GIT_OBJ_BLOB:
+                    if entry.type == pg.GIT_OBJECT_BLOB:
                         file_delta = FileDelta(
                             sha=str(commit.id),
                             pathOld=None,
                             pathNew=entry.name,
                             status="Add",
-                            lang=self.detect_language(entry.name),
+                            lang=detect_language(entry.name),
                             locAdd=0,  # TODO: Count lines for initial commit
                             locDel=0,  # TODO: Count lines for initial commit
                         )
@@ -284,10 +285,11 @@ class GitOdysseyDataCollector:
         branch_map = {}
 
         # Get all branches
-        for branch in repo.branches.remote:
+        for branch_name in repo.branches.remote:
             try:
-                commit_id = branch.peel(pg.Commit).id
-                branch_map[str(commit_id)] = branch.name
+                branch_ref = repo.lookup_reference(f"refs/remotes/{branch_name}")
+                commit_id = branch_ref.peel(pg.Commit).id
+                branch_map[str(commit_id)] = branch_name
             except pg.GitError:
                 continue
 
@@ -300,21 +302,24 @@ class GitOdysseyDataCollector:
         """Populate tag hints for commits"""
         tag_map = {}
 
-        # Get all tags
-        for tag_name in repo.tags:
-            try:
-                tag_ref = repo.lookup_reference(f"refs/tags/{tag_name}")
-                if tag_ref.type == pg.GIT_REF_OID:
-                    commit_id = tag_ref.peel(pg.Commit).id
-                    tag_map[str(commit_id)] = tag_name
-                elif tag_ref.type == pg.GIT_REF_SYMBOLIC:
-                    # Handle annotated tags
-                    target_ref = repo.lookup_reference(tag_ref.target)
-                    if target_ref.type == pg.GIT_REF_OID:
-                        commit_id = target_ref.peel(pg.Commit).id
+        # Get all tag references
+        for ref_name in repo.references:
+            if ref_name.startswith("refs/tags/"):
+                try:
+                    tag_ref = repo.lookup_reference(ref_name)
+                    tag_name = ref_name.replace("refs/tags/", "")
+
+                    if tag_ref.type == pg.GIT_REF_OID:
+                        commit_id = tag_ref.peel(pg.Commit).id
                         tag_map[str(commit_id)] = tag_name
-            except pg.GitError:
-                continue
+                    elif tag_ref.type == pg.GIT_REF_SYMBOLIC:
+                        # Handle annotated tags
+                        target_ref = repo.lookup_reference(tag_ref.target)
+                        if target_ref.type == pg.GIT_REF_OID:
+                            commit_id = target_ref.peel(pg.Commit).id
+                            tag_map[str(commit_id)] = tag_name
+                except pg.GitError:
+                    continue
 
         # Update commits with tag hints
         for commit in commits:
