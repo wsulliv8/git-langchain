@@ -1,8 +1,8 @@
 from typing import Dict, Any, List
 import pygit2 as pg
-from dataclasses import asdict
+from datetime import datetime
 from config import CollectorConfig
-from models import Commit, FileDelta, Hunk
+from models import Commit, FileDelta, Hunk, LocalData
 from .base_ingester import BaseIngester
 from utils.file_utils import detect_language
 
@@ -71,7 +71,7 @@ class GitLocalIngester(BaseIngester):
                     "name": commit.author.name,
                     "email": commit.author.email,
                 },
-                date=commit.commit_time,
+                date=datetime.fromtimestamp(commit.commit_time).isoformat(),
                 message=commit.message,
                 branchHints=[],  # Will be populated by branch analysis
                 tagHints=[],  # Will be populated by tag analysis
@@ -149,11 +149,11 @@ class GitLocalIngester(BaseIngester):
         # Get tag hints
         self._populate_tag_hints(repo, commits)
 
-        return {
-            "commits": [asdict(commit) for commit in commits],
-            "fileDeltas": [asdict(delta) for delta in file_deltas],
-            "hunks": [asdict(hunk) for hunk in hunks],
-        }
+        return LocalData(
+            Commits=commits,
+            FileDeltas=file_deltas,
+            Hunks=hunks,
+        )
 
     def _populate_branch_hints(self, repo: pg.Repository, commits: List[Commit]):
         """Populate branch hints for commits"""

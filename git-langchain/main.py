@@ -16,15 +16,15 @@ def main():
     ingester = Ingester(config)
 
     # Ingest all data
-    merged_data = ingester.ingest()
+    ingest_data = ingester.ingest()
 
-    # Output results
+    # Output results - serialize IngestData for JSON output
     if config.output_file:
         with open(config.output_file, "w") as f:
-            json.dump(merged_data, f, indent=2)
+            json.dump(ingest_data.model_dump(), f, indent=2)
         print(f"Data written to {config.output_file}")
     else:
-        print(json.dumps(merged_data, indent=2))
+        print(json.dumps(ingest_data.model_dump(), indent=2))
 
 
 if __name__ == "__main__":

@@ -1,31 +1,28 @@
-from dataclasses import dataclass
+from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 
 
-@dataclass
-class Commit:
+class Commit(BaseModel):
     sha: str
     parents: List[str]
     author: Dict[str, str]
     date: str
     message: str
-    branchHints: List[str]
-    tagHints: List[str]
+    branchHints: List[str] = Field(default_factory=list)
+    tagHints: List[str] = Field(default_factory=list)
 
 
-@dataclass
-class FileDelta:
+class FileDelta(BaseModel):
     sha: str
-    pathOld: Optional[str]
-    pathNew: Optional[str]
-    status: str  # Add/Mod/Del/Rename
-    lang: Optional[str]
-    locAdd: int
-    locDel: int
+    pathOld: Optional[str] = None
+    pathNew: Optional[str] = None
+    status: str = Field(description="Add/Mod/Del/Rename")
+    lang: Optional[str] = None
+    locAdd: int = 0
+    locDel: int = 0
 
 
-@dataclass
-class Hunk:
+class Hunk(BaseModel):
     sha: str
     pathNew: str
     startOld: int
@@ -35,22 +32,36 @@ class Hunk:
     text: str
 
 
-@dataclass
-class PR:
+class PR(BaseModel):
     id: int
     title: str
     body: str
     state: str
     createdAt: str
-    mergedAt: Optional[str]
-    commits: List[str]
-    issues: List[int]
+    mergedAt: Optional[str] = None
+    commits: List[str] = Field(default_factory=list)
+    issues: List[int] = Field(default_factory=list)
 
 
-@dataclass
-class Issue:
+class Issue(BaseModel):
     id: int
     title: str
     body: str
-    labels: List[str]
-    closedAt: Optional[str]
+    labels: List[str] = Field(default_factory=list)
+    closedAt: Optional[str] = None
+
+
+class APIData(BaseModel):
+    PRs: List[PR]
+    Issues: List[Issue]
+
+
+class LocalData(BaseModel):
+    Commits: List[Commit]
+    FileDeltas: List[FileDelta]
+    Hunks: List[Hunk]
+
+
+class IngestData(BaseModel):
+    APIData: APIData
+    LocalData: LocalData

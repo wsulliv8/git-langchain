@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from pydantic import BaseModel, Field
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -7,27 +7,25 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-@dataclass
-class CollectorConfig:
+class CollectorConfig(BaseModel):
     """Configuration for Git Odyssey data collection"""
 
     github_token: str
-    api_url: str
-    repo_owner: str
-    repo_name: str
-    repo_path: str
-    query_file: str
-    output_file: Optional[str] = "git-langchain/logs/output.json"
+    openai_api_key: str
+    api_url: str = Field(default="https://api.github.com/graphql")
+    repo_owner: str = Field(default="wsulliv8")
+    repo_name: str = Field(default="go-raft")
+    repo_path: str = Field(default="../distributed-systems/go/go-raft")
+    query_file: str = Field(default="git-langchain/graphql/query.graphql")
+    output_file: Optional[str] = Field(default="git-langchain/logs/output.json")
 
     @classmethod
     def from_env(cls) -> "CollectorConfig":
         """Load configuration from environment variables"""
-        github_token = os.getenv("GITHUB_TOKEN")
-        if not github_token:
-            raise ValueError("GITHUB_TOKEN environment variable is required")
 
         return cls(
-            github_token=github_token,
+            github_token=os.getenv("GITHUB_TOKEN"),
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
             api_url=os.getenv("API_URL", "https://api.github.com/graphql"),
             repo_owner=os.getenv("REPO_OWNER", "wsulliv8"),
             repo_name=os.getenv("REPO_NAME", "go-raft"),

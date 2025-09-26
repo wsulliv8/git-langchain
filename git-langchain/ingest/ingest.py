@@ -1,5 +1,6 @@
-from typing import Dict, Any, List
+from typing import Dict, Any
 from config import CollectorConfig
+from models import IngestData
 from .ingest_api import GitAPIIngester
 from .ingest_local import GitLocalIngester
 from .base_ingester import BaseIngester
@@ -13,24 +14,18 @@ class Ingester(BaseIngester):
 
     def ingest(self) -> Dict[str, Any]:
         """Ingest data from both GitHub API and local Git repository"""
-        print("Ingesting GitHub API data...")
-        api_data = self.ingest_api.ingest()
-
-        print("Ingesting local Git data...")
-        local_data = self.ingest_local.ingest()
-
-        # Merge the data
-        merged_data = {
-            **api_data,
-            **local_data,
-        }
-
-        print(
-            f"Ingestion complete. Found {len(merged_data.get('commits', []))} commits, "
-            f"{len(merged_data.get('prs', []))} PRs, {len(merged_data.get('issues', []))} issues"
+        print("Ingesting data...")
+        ingest_data = IngestData(
+            APIData=self.ingest_api.ingest(),
+            LocalData=self.ingest_local.ingest(),
         )
 
-        return merged_data
+        print(
+            f"Ingestion complete. Found {len(ingest_data.LocalData.Commits)} commits, "
+            f"{len(ingest_data.APIData.PRs)} PRs, {len(ingest_data.APIData.Issues)} issues"
+        )
+
+        return ingest_data
 
     def fetch(self) -> None:
         """Not used in composite ingester - delegates to sub-ingesters"""

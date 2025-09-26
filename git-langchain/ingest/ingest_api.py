@@ -1,8 +1,7 @@
 from typing import Dict, Any, List
-from dataclasses import asdict
 import requests
 from config import CollectorConfig
-from models import PR, Issue
+from models import PR, Issue, APIData
 from .base_ingester import BaseIngester
 
 
@@ -70,7 +69,7 @@ class GitAPIIngester(BaseIngester):
             )
             issues.append(issue)
 
-        return {
-            "prs": [asdict(pr) for pr in prs],
-            "issues": [asdict(issue) for issue in issues],
-        }
+        return APIData(
+            PRs=prs,
+            Issues=issues,
+        )

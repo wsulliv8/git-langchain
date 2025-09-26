@@ -2,3 +2,11 @@ openai
 python-dotenv
 requests
 pygit2
+langchain
+langchain-openai
+langchain-community
+langchain-core
+chromadb
+sqlalchemy
+psycopg2-binary
+pydantic
