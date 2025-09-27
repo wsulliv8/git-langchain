@@ -5,15 +5,18 @@ Combines file summaries and commit messages to create comprehensive commit summa
 
 from typing import Dict, Optional, List
 from langchain_core.prompts import ChatPromptTemplate
-from .base_summarizer import BaseSummarizer, SummaryResult
+from langchain_openai import ChatOpenAI
+from .hunk_summarizer import SummaryResult
 from ..models import Commit
 
 
-class CommitSummarizer(BaseSummarizer):
+class CommitSummarizer:
     """Summarizes entire commits by combining file summaries and commit messages"""
 
     def __init__(self, model_name: str = "gpt-3.5-turbo", temperature: float = 0.1):
-        super().__init__(model_name, temperature)
+        self.llm = ChatOpenAI(
+            model_name=model_name, temperature=temperature, max_tokens=500
+        )
 
         self.prompt = ChatPromptTemplate.from_messages(
             [

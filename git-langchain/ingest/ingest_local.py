@@ -3,13 +3,12 @@ import pygit2 as pg
 from datetime import datetime
 from config import CollectorConfig
 from models import Commit, FileDelta, Hunk, LocalData
-from .base_ingester import BaseIngester
 from utils.file_utils import detect_language
 
 
-class GitLocalIngester(BaseIngester):
+class GitLocalIngester:
     def __init__(self, config: CollectorConfig):
-        super().__init__(config)
+        self.config = config
         self.status_map = {
             pg.GIT_DELTA_UNMODIFIED: "Unmodified",
             pg.GIT_DELTA_ADDED: "Add",
@@ -24,8 +23,13 @@ class GitLocalIngester(BaseIngester):
             pg.GIT_DELTA_CONFLICTED: "Conflicted",
         }
 
-    def fetch(self) -> pg.Repository:
-        """Use pygit2 to fetch local Git data"""
+    def ingest(self) -> LocalData:
+        """Ingest data from local Git repository"""
+        repo = self._open_repository()
+        return self._parse(repo)
+
+    def _open_repository(self) -> pg.Repository:
+        """Use pygit2 to open local Git repository"""
         try:
             repo = pg.Repository(self.config.repo_path)
         except pg.GitError as e:
@@ -35,7 +39,7 @@ class GitLocalIngester(BaseIngester):
 
         return repo or None
 
-    def parse(self, repo: pg.Repository) -> Dict[str, Any]:
+    def _parse(self, repo: pg.Repository) -> LocalData:
         if repo is None:
             raise Exception("Repository is None")
 

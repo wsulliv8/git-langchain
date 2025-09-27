@@ -3,21 +3,20 @@ from config import CollectorConfig
 from models import IngestData
 from .ingest_api import GitAPIIngester
 from .ingest_local import GitLocalIngester
-from .base_ingester import BaseIngester
 
 
-class Ingester(BaseIngester):
+class Ingester:
     def __init__(self, config: CollectorConfig):
-        super().__init__(config)
-        self.ingest_api = GitAPIIngester(config)
-        self.ingest_local = GitLocalIngester(config)
+        self.config = config
+        self.api_ingester = GitAPIIngester(config)
+        self.local_ingester = GitLocalIngester(config)
 
-    def ingest(self) -> Dict[str, Any]:
+    def ingest(self) -> IngestData:
         """Ingest data from both GitHub API and local Git repository"""
         print("Ingesting data...")
         ingest_data = IngestData(
-            APIData=self.ingest_api.ingest(),
-            LocalData=self.ingest_local.ingest(),
+            APIData=self.api_ingester.ingest(),
+            LocalData=self.local_ingester.ingest(),
         )
 
         print(
@@ -26,11 +25,3 @@ class Ingester(BaseIngester):
         )
 
         return ingest_data
-
-    def fetch(self) -> None:
-        """Not used in composite ingester - delegates to sub-ingesters"""
-        pass
-
-    def parse(self, data: None) -> Dict[str, Any]:
-        """Not used in composite ingester - delegates to sub-ingesters"""
-        return {}

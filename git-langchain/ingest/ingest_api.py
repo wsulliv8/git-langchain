@@ -2,18 +2,23 @@ from typing import Dict, Any, List
 import requests
 from config import CollectorConfig
 from models import PR, Issue, APIData
-from .base_ingester import BaseIngester
 
 
-class GitAPIIngester(BaseIngester):
+class GitAPIIngester:
     def __init__(self, config: CollectorConfig):
-        super().__init__(config)
+        self.config = config
         self.headers = {
             "Authorization": f"Bearer {config.github_token}",
             "Content-Type": "application/json",
         }
 
-    def fetch(self) -> Dict[str, Any]:
+    def ingest(self) -> APIData:
+        """Ingest data from GitHub API"""
+        raw_data = self._fetch()
+        return self._parse(raw_data)
+
+    def _fetch(self) -> Dict[str, Any]:
+        """Fetch raw data from GitHub GraphQL API"""
         with open(self.config.query_file, "r") as file:
             query = file.read()
 
@@ -37,7 +42,8 @@ class GitAPIIngester(BaseIngester):
 
         return result
 
-    def parse(self, data: Dict[str, Any]) -> Dict[str, List]:
+    def _parse(self, data: Dict[str, Any]) -> APIData:
+        """Parse raw API response into structured data"""
         repo_data = data["data"]["repository"]
 
         # Process PRs

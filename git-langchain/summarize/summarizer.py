@@ -4,10 +4,9 @@ Coordinates the hierarchical summarization process: Hunk -> FileDelta -> Commit
 """
 
 from typing import Dict, List, Optional, Tuple
-from .hunk_summarizer import HunkSummarizer
+from .hunk_summarizer import HunkSummarizer, SummaryResult
 from .file_summarizer import FileDeltaSummarizer
 from .commit_summarizer import CommitSummarizer
-from .base_summarizer import SummaryResult
 from ..models import Commit, FileDelta, Hunk
 
 

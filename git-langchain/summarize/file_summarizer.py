@@ -5,16 +5,18 @@ Rolls up hunk summaries to create file-level summaries
 
 from typing import Dict, Optional, List
 from langchain_core.prompts import ChatPromptTemplate
-from .base_summarizer import BaseSummarizer, SummaryResult
-from .hunk_summarizer import HunkSummarizer
+from langchain_openai import ChatOpenAI
+from .hunk_summarizer import HunkSummarizer, SummaryResult
 from ..models import FileDelta
 
 
-class FileDeltaSummarizer(BaseSummarizer):
+class FileDeltaSummarizer:
     """Summarizes file-level changes by rolling up hunk summaries"""
 
     def __init__(self, model_name: str = "gpt-3.5-turbo", temperature: float = 0.1):
-        super().__init__(model_name, temperature)
+        self.llm = ChatOpenAI(
+            model_name=model_name, temperature=temperature, max_tokens=500
+        )
         self.hunk_summarizer = HunkSummarizer(model_name, temperature)
 
         self.prompt = ChatPromptTemplate.from_messages(

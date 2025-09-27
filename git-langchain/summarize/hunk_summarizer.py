@@ -5,15 +5,33 @@ Summarizes individual code hunks (diff chunks) with structured prompts
 
 from typing import Dict, Optional, List
 from langchain_core.prompts import ChatPromptTemplate
-from .base_summarizer import BaseSummarizer, SummaryResult
+from langchain_openai import ChatOpenAI
 from ..models import Hunk
 
 
-class HunkSummarizer(BaseSummarizer):
+class SummaryResult:
+    """Structured result from summarization"""
+
+    def __init__(
+        self,
+        content: str,
+        intent_tags: List[str],
+        confidence: float,
+        metadata: Dict[str, any],
+    ):
+        self.content = content
+        self.intent_tags = intent_tags
+        self.confidence = confidence
+        self.metadata = metadata
+
+
+class HunkSummarizer:
     """Summarizes individual code hunks"""
 
     def __init__(self, model_name: str = "gpt-3.5-turbo", temperature: float = 0.1):
-        super().__init__(model_name, temperature)
+        self.llm = ChatOpenAI(
+            model_name=model_name, temperature=temperature, max_tokens=500
+        )
 
         self.prompt = ChatPromptTemplate.from_messages(
             [
@@ -120,3 +138,27 @@ Provide a concise summary of what changed and why.""",
                 results.append(fallback_result)
 
         return results
+
+    def _extract_intent_tags(self, summary: str) -> List[str]:
+        """Extract intent tags from summary text"""
+        tags = []
+        summary_lower = summary.lower()
+
+        if any(word in summary_lower for word in ["fix", "bug", "error", "issue"]):
+            tags.append("bug_fix")
+        if any(word in summary_lower for word in ["refactor", "clean", "restructure"]):
+            tags.append("refactor")
+        if any(
+            word in summary_lower for word in ["feature", "add", "implement", "new"]
+        ):
+            tags.append("feature")
+        if any(word in summary_lower for word in ["doc", "comment", "readme"]):
+            tags.append("docs")
+        if any(word in summary_lower for word in ["test", "spec", "unit"]):
+            tags.append("test")
+        if any(word in summary_lower for word in ["security", "auth", "permission"]):
+            tags.append("security")
+        if any(word in summary_lower for word in ["performance", "optimize", "speed"]):
+            tags.append("performance")
+
+        return tags if tags else ["other"]
